@@ -123,7 +123,7 @@ class ZipManager:
             print(f"{Fore.GREEN}Compressed size: {FileUtils.get_file_size_str(total_compressed)}")
             print(f"{Fore.GREEN}Overall compression: {overall_ratio:.1f}%")
     
-    def extract_all_files(self, zip_path: str, extract_to: str, password: Optional[str] = None) -> bool:
+    def extract_all_files(self, zip_path: str, extract_to: str, password: Optional[str] = None, progress_callback=None) -> bool:
         """Extract all files from zip archive"""
         try:
             # Create extraction directory
@@ -140,45 +140,61 @@ class ZipManager:
                 total_files = len(files_to_extract)
                 
                 if total_files == 0:
-                    ConsoleUtils.print_warning("No files to extract")
+                    if not progress_callback:
+                        ConsoleUtils.print_warning("No files to extract")
                     return True
                 
-                ConsoleUtils.print_info(f"Extracting {total_files} files to: {extract_to}")
+                if not progress_callback:
+                    ConsoleUtils.print_info(f"Extracting {total_files} files to: {extract_to}")
                 
                 # Extract files with progress
                 extracted_count = 0
                 for file_info in files_to_extract:
                     try:
+                        # Check if operation should continue
+                        if progress_callback and not progress_callback(extracted_count, total_files):
+                            return False  # Operation cancelled
+                        
                         # Extract file
                         zip_file.extract(file_info, extract_to, pwd=password.encode() if password else None)
                         extracted_count += 1
                         
                         # Show progress
-                        progress = (extracted_count / total_files) * 100
-                        print(f"\r{Fore.CYAN}Progress: {progress:.1f}% ({extracted_count}/{total_files})", end='', flush=True)
+                        if progress_callback:
+                            progress_callback(extracted_count, total_files)
+                        else:
+                            progress = (extracted_count / total_files) * 100
+                            print(f"\r{Fore.CYAN}Progress: {progress:.1f}% ({extracted_count}/{total_files})", end='', flush=True)
                         
                     except Exception as e:
-                        ConsoleUtils.print_error(f"\nFailed to extract {file_info.filename}: {e}")
+                        if not progress_callback:
+                            ConsoleUtils.print_error(f"\nFailed to extract {file_info.filename}: {e}")
                 
-                print()  # New line after progress
-                ConsoleUtils.print_success(f"Successfully extracted {extracted_count}/{total_files} files")
+                if not progress_callback:
+                    print()  # New line after progress
+                    ConsoleUtils.print_success(f"Successfully extracted {extracted_count}/{total_files} files")
                 return extracted_count > 0
                 
         except FileNotFoundError:
-            ConsoleUtils.print_error(f"Zip file not found: {zip_path}")
+            if not progress_callback:
+                ConsoleUtils.print_error(f"Zip file not found: {zip_path}")
         except zipfile.BadZipFile:
-            ConsoleUtils.print_error(f"Invalid zip file: {zip_path}")
+            if not progress_callback:
+                ConsoleUtils.print_error(f"Invalid zip file: {zip_path}")
         except RuntimeError as e:
             if "Bad password" in str(e):
-                ConsoleUtils.print_error("Incorrect password for zip file")
+                if not progress_callback:
+                    ConsoleUtils.print_error("Incorrect password for zip file")
             else:
-                ConsoleUtils.print_error(f"Error extracting files: {e}")
+                if not progress_callback:
+                    ConsoleUtils.print_error(f"Error extracting files: {e}")
         except Exception as e:
-            ConsoleUtils.print_error(f"Unexpected error during extraction: {e}")
+            if not progress_callback:
+                ConsoleUtils.print_error(f"Unexpected error during extraction: {e}")
         
         return False
     
-    def extract_selected_files(self, zip_path: str, extract_to: str, indices: List[int], password: Optional[str] = None) -> bool:
+    def extract_selected_files(self, zip_path: str, extract_to: str, indices: List[int], password: Optional[str] = None, progress_callback=None) -> bool:
         """Extract selected files by indices"""
         try:
             # Create extraction directory
@@ -197,10 +213,12 @@ class ZipManager:
                 valid_indices = [i for i in indices if 0 <= i <= max_index]
                 
                 if not valid_indices:
-                    ConsoleUtils.print_error("No valid file indices provided")
+                    if not progress_callback:
+                        ConsoleUtils.print_error("No valid file indices provided")
                     return False
                 
-                ConsoleUtils.print_info(f"Extracting {len(valid_indices)} selected files to: {extract_to}")
+                if not progress_callback:
+                    ConsoleUtils.print_info(f"Extracting {len(valid_indices)} selected files to: {extract_to}")
                 
                 # Extract selected files
                 extracted_count = 0
@@ -208,36 +226,51 @@ class ZipManager:
                     file_info = file_list[index]
                     
                     if file_info.is_dir():
-                        ConsoleUtils.print_warning(f"Skipping directory: {file_info.filename}")
+                        if not progress_callback:
+                            ConsoleUtils.print_warning(f"Skipping directory: {file_info.filename}")
                         continue
                     
                     try:
+                        # Check if operation should continue
+                        if progress_callback and not progress_callback(i, len(valid_indices)):
+                            return False  # Operation cancelled
+                        
                         # Extract file
                         zip_file.extract(file_info, extract_to, pwd=password.encode() if password else None)
                         extracted_count += 1
                         
                         # Show progress
-                        progress = ((i + 1) / len(valid_indices)) * 100
-                        print(f"\r{Fore.CYAN}Progress: {progress:.1f}% ({i + 1}/{len(valid_indices)})", end='', flush=True)
+                        if progress_callback:
+                            progress_callback(i + 1, len(valid_indices))
+                        else:
+                            progress = ((i + 1) / len(valid_indices)) * 100
+                            print(f"\r{Fore.CYAN}Progress: {progress:.1f}% ({i + 1}/{len(valid_indices)})", end='', flush=True)
                         
                     except Exception as e:
-                        ConsoleUtils.print_error(f"\nFailed to extract {file_info.filename}: {e}")
+                        if not progress_callback:
+                            ConsoleUtils.print_error(f"\nFailed to extract {file_info.filename}: {e}")
                 
-                print()  # New line after progress
-                ConsoleUtils.print_success(f"Successfully extracted {extracted_count} files")
+                if not progress_callback:
+                    print()  # New line after progress
+                    ConsoleUtils.print_success(f"Successfully extracted {extracted_count} files")
                 return extracted_count > 0
                 
         except FileNotFoundError:
-            ConsoleUtils.print_error(f"Zip file not found: {zip_path}")
+            if not progress_callback:
+                ConsoleUtils.print_error(f"Zip file not found: {zip_path}")
         except zipfile.BadZipFile:
-            ConsoleUtils.print_error(f"Invalid zip file: {zip_path}")
+            if not progress_callback:
+                ConsoleUtils.print_error(f"Invalid zip file: {zip_path}")
         except RuntimeError as e:
             if "Bad password" in str(e):
-                ConsoleUtils.print_error("Incorrect password for zip file")
+                if not progress_callback:
+                    ConsoleUtils.print_error("Incorrect password for zip file")
             else:
-                ConsoleUtils.print_error(f"Error extracting files: {e}")
+                if not progress_callback:
+                    ConsoleUtils.print_error(f"Error extracting files: {e}")
         except Exception as e:
-            ConsoleUtils.print_error(f"Unexpected error during extraction: {e}")
+            if not progress_callback:
+                ConsoleUtils.print_error(f"Unexpected error during extraction: {e}")
         
         return False
     
